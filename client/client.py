@@ -1,4 +1,4 @@
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from pathlib import Path
 
 import httpx
@@ -6,11 +6,52 @@ from models import User
 
 DEFAULT_USERS_DIR = Path(__file__).parent / "users"
 
+
+def fetch(args: Namespace, client: httpx.Client):
+    users = User.get_multiple_from_web(ids=args.id, client=client)
+    for user in users:
+        print(user)
+        if args.save:
+            user.save_to_file(args.dir)
+
+
+def create(args: Namespace, client: httpx.Client):
+    if args.username is None or args.name is None or args.email is None:
+        parser.print_usage()
+        exit("--username, --name, --email are all required in `create` mode")
+    new_user = User(
+        id=None,
+        username=args.username,
+        name=args.name,
+        email=args.email,
+    ).save_to_web(client)
+    print(new_user)
+    if args.save:
+        new_user.save_to_file(args.dir)
+
+
+def load(args: Namespace, client: httpx.Client):
+    if args.id is None:
+        for file in args.dir.glob("*.json"):
+            user = User.model_validate_json(file.read_text())
+            print(user)
+    else:
+        for user_id in args.id:
+            user = User.load_from_file(args.dir, user_id)
+            print(user)
+
+
 if __name__ == "__main__":
+    handler_map = {
+        "fetch": fetch,
+        "create": create,
+        "load": load,
+    }
+
     parser = ArgumentParser()
     parser.add_argument(
         "action",
-        choices=["fetch", "create", "load"],
+        choices=handler_map.keys(),
         help="The subcommand to run",
     )
     parser.add_argument(
@@ -44,34 +85,10 @@ if __name__ == "__main__":
 
     client = httpx.Client(base_url="https://jsonplaceholder.typicode.com/")
     args.dir.mkdir(exist_ok=True)
-    if args.action == "fetch":
-        users = User.get_multiple_from_web(ids=args.id, client=client)
-        for user in users:
-            print(user)
-            if args.save:
-                user.save_to_file(args.dir)
-    elif args.action == "create":
-        if args.username is None or args.name is None or args.email is None:
-            parser.print_usage()
-            exit("--username, --name, --email are all required in `create` mode")
-        new_user = User(
-            id=None,
-            username=args.username,
-            name=args.name,
-            email=args.email,
-        ).save_to_web(client)
-        print(new_user)
-        if args.save:
-            new_user.save_to_file(args.dir)
-    elif args.action == "load":
-        if args.id is None:
-            for file in args.dir.glob("*.json"):
-                user = User.model_validate_json(file.read_text())
-                print(user)
-        else:
-            for user_id in args.id:
-                user = User.load_from_file(args.dir, user_id)
-                print(user)
+
+    handler = handler_map[args.action]
+    handler(args, client)
+
     # Optional: add an "update" subcommand
     # Example:
     # python update --id 3 --username john
