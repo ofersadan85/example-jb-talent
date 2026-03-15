@@ -1,7 +1,9 @@
 from argparse import ArgumentParser, Namespace
+from datetime import datetime
 from pathlib import Path
 
 import httpx
+from errors import MissingArgument, MyAppError
 from models import User
 
 DEFAULT_USERS_DIR = Path(__file__).parent / "users"
@@ -16,9 +18,12 @@ def fetch(args: Namespace, client: httpx.Client):
 
 
 def create(args: Namespace, client: httpx.Client):
-    if args.username is None or args.name is None or args.email is None:
-        parser.print_usage()
-        exit("--username, --name, --email are all required in `create` mode")
+    if args.username is None:
+        raise MissingArgument("--username", "create")
+    if args.name is None:
+        raise MissingArgument("--name", "create")
+    if args.email is None:
+        raise MissingArgument("--email", "create")
     new_user = User(
         id=None,
         username=args.username,
@@ -42,6 +47,7 @@ def load(args: Namespace, client: httpx.Client):
 
 
 if __name__ == "__main__":
+    start = datetime.now()
     handler_map = {
         "fetch": fetch,
         "create": create,
@@ -87,7 +93,15 @@ if __name__ == "__main__":
     args.dir.mkdir(exist_ok=True)
 
     handler = handler_map[args.action]
-    handler(args, client)
+    try:
+        handler(args, client)
+    except MyAppError as e:
+        parser.print_usage()
+        e.add_note("This is additional info")
+        print(e)
+        raise
+
+    print(datetime.now() - start)
 
     # Optional: add an "update" subcommand
     # Example:

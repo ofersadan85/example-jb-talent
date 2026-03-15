@@ -1,4 +1,5 @@
 from pathlib import Path
+from threading import Thread
 
 import httpx
 from pydantic import BaseModel
@@ -16,6 +17,18 @@ class UserCompany(BaseModel):
     name: str
     catchPhrase: str
     bs: str
+
+
+class FetchUserIdThread(Thread):
+    def __init__(self, id: int, client: httpx.Client | None = None) -> None:
+        super().__init__()
+        self.id = id
+        self.client = client
+        self.result = None
+        self.start()
+
+    def run(self):
+        self.result = User.get_from_web(self.id, self.client)
 
 
 class User(BaseModel):
@@ -63,4 +76,7 @@ class User(BaseModel):
                 response = client.get(USERS_URL_PATH)
             return [cls.model_validate(u) for u in response.json()]
         else:
-            return [cls.get_from_web(i, client) for i in ids]
+            threads = [FetchUserIdThread(i, client) for i in ids]
+            for t in threads:
+                t.join()
+            return [t.result for t in threads if t.result is not None]
