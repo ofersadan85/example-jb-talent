@@ -1,7 +1,7 @@
 from argparse import ArgumentParser, Namespace
 from datetime import datetime
 from pathlib import Path
-
+import asyncio
 import httpx
 from errors import MissingArgument, MyAppError
 from models import User
@@ -9,22 +9,22 @@ from models import User
 DEFAULT_USERS_DIR = Path(__file__).parent / "users"
 
 
-def fetch(args: Namespace, client: httpx.Client):
-    users = User.get_multiple_from_web(ids=args.id, client=client)
+async def fetch(args: Namespace, client: httpx.AsyncClient):
+    users = await User.get_multiple_from_web(ids=args.id, client=client)
     for user in users:
         print(user)
         if args.save:
             user.save_to_file(args.dir)
 
 
-def create(args: Namespace, client: httpx.Client):
+async def create(args: Namespace, client: httpx.AsyncClient):
     if args.username is None:
         raise MissingArgument("--username", "create")
     if args.name is None:
         raise MissingArgument("--name", "create")
     if args.email is None:
         raise MissingArgument("--email", "create")
-    new_user = User(
+    new_user = await User(
         id=None,
         username=args.username,
         name=args.name,
@@ -33,7 +33,7 @@ def create(args: Namespace, client: httpx.Client):
     print(new_user)
     if args.save:
         new_user.save_to_file(args.dir)
-
+        
 
 def load(args: Namespace, client: httpx.Client):
     if args.id is None:
@@ -89,12 +89,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
 
-    client = httpx.Client(base_url="https://jsonplaceholder.typicode.com/")
+    client = httpx.AsyncClient(base_url="https://jsonplaceholder.typicode.com/")
     args.dir.mkdir(exist_ok=True)
 
     handler = handler_map[args.action]
     try:
-        handler(args, client)
+        asyncio.run(handler(args, client))
     except MyAppError as e:
         parser.print_usage()
         e.add_note("This is additional info")
