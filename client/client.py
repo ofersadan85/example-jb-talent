@@ -1,7 +1,8 @@
+import asyncio
 from argparse import ArgumentParser, Namespace
 from datetime import datetime
 from pathlib import Path
-import asyncio
+
 import httpx
 from errors import MissingArgument, MyAppError
 from models import User
@@ -14,7 +15,14 @@ async def fetch(args: Namespace, client: httpx.AsyncClient):
     for user in users:
         print(user)
         if args.save:
-            user.save_to_file(args.dir)
+            # Opening a new thread and starting it means we "fire and forget", it will happen in the background for us
+            # We DON'T wait for it to finish
+            # threading.Thread(target=user.save_to_file, args=[args.dir]).start()
+            # Using asyncio.to_thread also opens a new thread, but we wait for it to finish with `await`, not blocking the event loop
+            await asyncio.to_thread(user.save_to_file, args.dir)
+            # If we used the normal function, we would probably block for too long, nothing on the main event loop could run
+            # user.save_to_file(args.dir)
+            # Using `create_task` doesn't help us, it would also block the event loop
 
 
 async def create(args: Namespace, client: httpx.AsyncClient):
